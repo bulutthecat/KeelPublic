@@ -106,6 +106,17 @@ Useful switches: `-SkipBuild` to reuse `out\`, `-SkipRegMerge` to skip the regis
 delta, and `-Disk UEFI|BIOS` to pick a fully automatic disk layout instead of the
 interactive default. It needs `oscdimg.exe` from the Windows ADK Deployment Tools.
 
+If you want to experiment with a different Windows 7 image, `-AllowDonorMismatch` lets the
+build through when the donor files don't match the checksums in `tools\cut3-manifest.json`.
+Keelshim patches code at fixed offsets inside the donor binaries, so expect a broken shell or
+compositor on anything but the exact build. Media built this way leaves `C:\Keel\donor-mismatch.txt`
+on the installed machine so it's obvious in a bug report.
+
+Every run writes its full output to `make-keel-iso.log` next to the ISO. What a good build and
+install look like, where the installed machine keeps its logs (`C:\Keel\first-boot.log`,
+`C:\Keel\native-keel.log`) and the known failure states are in
+[doc/troubleshooting.md](doc/troubleshooting.md).
+
 ### The toolchain
 
 Nothing has to be installed by hand. On its first run `make-keel-iso.ps1` provisions

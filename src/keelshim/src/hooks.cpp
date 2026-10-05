@@ -4330,7 +4330,8 @@ void InstallComExitDiagnostics() {
     if (!g_comLogAll && !IsExplorerProcess()) return;
     HMODULE cb = GetModuleHandleW(L"combase.dll"); if (!cb) cb = LoadLibraryW(L"combase.dll");
     HMODULE u32 = g_comLogAll ? GetModuleHandleW(L"user32.dll") : nullptr;
-    HMODULE nt = g_comLogAll ? GetModuleHandleW(L"ntdll.dll") : nullptr;
+    // the exit is always hooked in explorer, a shell that quits leaves no taskbar and nothing else in the log
+    HMODULE nt = GetModuleHandleW(L"ntdll.dll");
     if (cb) {
         g_realCoCreateInstance   = (CoCreateInstanceFn)GetProcAddress(cb, "CoCreateInstance");
         g_realCoCreateInstanceEx = (CoCreateInstanceExFn)GetProcAddress(cb, "CoCreateInstanceEx");

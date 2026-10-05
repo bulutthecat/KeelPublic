@@ -26,13 +26,19 @@ param(
     [switch]$SkipBuild,
     [switch]$SkipRegMerge,
     [switch]$KeepWork,
-    [switch]$ReuseWork
+    [switch]$ReuseWork,
+    [switch]$AllowDonorMismatch
 )
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $here
 function Say($t)  { Write-Host "  $t" -ForegroundColor DarkGray }
 function Step($t) { Write-Host ""; Write-Host "! $t !" -ForegroundColor Cyan }
+
+$buildLog = Join-Path (Split-Path -Parent $Out) 'make-keel-iso.log'
+New-Item -ItemType Directory -Force (Split-Path -Parent $Out) | Out-Null
+Start-Transcript -Path $buildLog -Force | Out-Null
+trap { Write-Host "!FAILED! $($_.Exception.Message)" -ForegroundColor Red; Stop-Transcript -ErrorAction SilentlyContinue | Out-Null; break }
 
 $toolsRoot = if ($env:KEEL_TOOLS) { $env:KEEL_TOOLS } else { 'C:\Keel-tools' }
 if (-not (Test-Path (Join-Path $toolsRoot 'msvc\VC\Tools\MSVC'))) {
@@ -48,20 +54,35 @@ $sevenZip = (Get-Command 7z.exe -ErrorAction Stop).Source
 if (-not (Test-Path $Win10Iso)) { throw "Windows 10 LTSC ISO not found $Win10Iso" }
 
 Step '1. prerequisites'
+# toolchains provisioned before python-registry was on the pip list lack it, and make-cut3 and the reg merge import it
+$toolsPy = Join-Path $toolsRoot 'python\python.exe'
+if (Test-Path $toolsPy) {
+    & $toolsPy -c "import importlib.util as u, sys; sys.exit(0 if u.find_spec('pefile') and u.find_spec('Registry') else 1)"
+    if ($LASTEXITCODE -ne 0) {
+        Say 'python is missing pefile or python-registry so installing them'
+        & $toolsPy -m pip install --quiet pefile python-registry
+        if ($LASTEXITCODE -ne 0) { throw "pip could not install pefile and python-registry into $toolsPy" }
+    }
+}
 if (-not (Test-Path (Join-Path $root 'donor\raw\Windows\System32\dwm.exe'))) {
     if (-not (Test-Path $Win7Iso)) { throw "donor\raw is empty and the Windows 7 ISO was not found at $Win7Iso" }
     Say 'donor\raw missing so extracting it from the Windows 7 ISO'
     & (Join-Path $here 'extract-donor.ps1') -Iso $Win7Iso
 }
-if (-not (Test-Path (Join-Path $root 'donor\cut3'))) {
-    Say 'donor\cut3 missing so building the Windows 7 userland from donor\raw'
-    & (Join-Path $here 'make-cut3.ps1') -Win10Iso $Win10Iso
-    if ($LASTEXITCODE -ne 0) { throw "make-cut3.ps1 failed ($LASTEXITCODE)" }
+$cut3Ok = $false
+if (Test-Path (Join-Path $root 'donor\cut3')) {
+    & (Join-Path $here 'make-cut3-manifest.ps1') -AllowDonorMismatch:$AllowDonorMismatch
+    $cut3Ok = ($LASTEXITCODE -eq 0)
+    # cut3 is generated from donor\raw, so a stale or half-built one is rebuilt rather than refused
+    if (-not $cut3Ok) { Say 'donor\cut3 does not match tools\cut3-manifest.json so rebuilding it from donor\raw' }
 }
-else {
-    & (Join-Path $here 'make-cut3-manifest.ps1')
-    if ($LASTEXITCODE -eq 2) { throw 'donor\cut3 is missing so build it with tools\make-cut3.ps1' }
-    if ($LASTEXITCODE -eq 1) { throw 'donor\cut3 does not match tools\cut3-manifest.json so refusing to build media from it.' }
+else { Say 'donor\cut3 missing so building the Windows 7 userland from donor\raw' }
+if (-not $cut3Ok) {
+    & (Join-Path $here 'make-cut3.ps1') -Win10Iso $Win10Iso -AllowDonorMismatch:$AllowDonorMismatch
+    if ($LASTEXITCODE -ne 0) { throw "make-cut3.ps1 failed ($LASTEXITCODE), donor\cut3 does not match tools\cut3-manifest.json so refusing to build media from it" }
+}
+if ($AllowDonorMismatch) {
+    Write-Warning '-AllowDonorMismatch so donor\cut3 is not held to tools\cut3-manifest.json, keelshim patches fixed offsets in the donor and another build can break the shell or compositor'
 }
 
 if (-not $SkipBuild) {
@@ -129,6 +150,10 @@ Copy-Item (Join-Path $root 'tools\apply-reg-merge.ps1') (Join-Path $oem 'vm') -F
 $cplTsv = Join-Path $root 'vm\cpl-reg-win7.tsv'
 if (Test-Path $cplTsv) { Copy-Item $cplTsv (Join-Path $oem 'vm') -Force }
 else { Write-Warning 'vm\cpl-reg-win7.tsv missing so Control Panel items will not be repaired, run tools\export-cpl-reg.ps1' }
+# the installed machine then shows it came from media built past the donor check
+$mismatchNote = Join-Path $oem 'donor-mismatch.txt'
+if ($AllowDonorMismatch) { Set-Content $mismatchNote "built $(Get-Date -Format s) with -AllowDonorMismatch, donor\cut3 was not held to tools\cut3-manifest.json" -Encoding ascii }
+else { Remove-Item $mismatchNote -Force -ErrorAction SilentlyContinue }
 Say ("payload {0} MB, {1} files" -f [int]((Get-ChildItem $oem -Recurse -File | Measure-Object Length -Sum).Sum / 1MB),
                                    (Get-ChildItem $oem -Recurse -File | Measure-Object).Count)
 
@@ -326,3 +351,5 @@ Write-Host ("ISO {0}  ({1:N2} GB)" -f $Out, ((Get-Item $Out).Length / 1GB)) -For
 Write-Host "boot a machine or VM from it and it installs Windows 10 LTSC unattended, then applies Keel and"
 Write-Host "reboots into the Windows 7 desktop, test it in a throwaway VM"
 Write-Host "    boot a throwaway VM from it without another answer-file ISO since the two would race" -ForegroundColor White
+Write-Host "build log $buildLog, doc\troubleshooting.md has what a good install looks like and where its logs are"
+Stop-Transcript | Out-Null

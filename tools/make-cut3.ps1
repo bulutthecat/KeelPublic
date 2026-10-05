@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 [CmdletBinding()]
-param([string]$Win10Iso = 'C:\Keel-media\LTSC2021_x64.iso', [switch]$SkipVerify)
+param([string]$Win10Iso = 'C:\Keel-media\LTSC2021_x64.iso', [switch]$SkipVerify, [switch]$AllowDonorMismatch)
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -72,12 +72,18 @@ New-Item -ItemType Directory -Force $asm | Out-Null
 $ccMan = Get-ChildItem (Join-Path $raw 'Windows\winsxs\Manifests') -Force -Filter 'amd64_microsoft.windows.common-controls_*_6.0.7601.23403_*.manifest' |
          Select-Object -First 1
 if (-not $ccMan) { throw 'no Win7 Common-Controls 6.0.7601.23403 manifest under donor\raw\Windows\winsxs\Manifests' }
+# the DLL comes from the same WinSxS payload, System32\comctl32.dll is v5.82 and the Win7 explorer exits 1 on it
+$ccDll = Join-Path $ccMan.Directory.Parent.FullName "$($ccMan.BaseName)\comctl32.dll"
+if (-not (Test-Path -LiteralPath $ccDll)) { throw "no Win7 Common-Controls 6.0.7601.23403 comctl32.dll at $ccDll so rerun tools\extract-donor.ps1" }
+Copy-Item -LiteralPath $ccDll (Join-Path $asm 'comctl32.dll') -Force
+(Get-Item -LiteralPath (Join-Path $asm 'comctl32.dll') -Force).Attributes = 'Normal'
 $x = Get-Content $ccMan.FullName -Raw
 $x = [regex]::Replace($x, '<assemblyIdentity\b[^>]*?name="Microsoft\.Windows\.Common-Controls"[^>]*?/>',
                       '<assemblyIdentity name="Keel.Common-Controls" version="6.0.7601.23403" processorArchitecture="amd64" type="win32"/>')
 $x = [regex]::Replace($x, '(?s)<dependency\b.*?</dependency>', '')
-# the hash covers the stock comctl32 and the import patch below invalidates it, so it cannot stay
+# the hash and signature info cover the stock comctl32 and the import patch below invalidates them, so they cannot stay
 $x = [regex]::Replace($x, '(?s)<(\w+:)?hash\b.*?</(\w+:)?hash>', '')
+$x = [regex]::Replace($x, '(?s)<signatureInfo\b.*?</signatureInfo>', '')
 $x = [regex]::Replace($x, '(?s)<memberships\b.*?</memberships>', '')
 $x = [regex]::Replace($x, '\s(hash|hashalg)="[^"]*"', '')
 $x = [regex]::Replace($x, '\scmiv2:[\w]+="[^"]*"', '')
@@ -116,6 +122,6 @@ foreach ($exe in 'explorer.exe', 'control.exe', 'rundll32.exe') {
 
 if (-not $SkipVerify) {
     Step '7. verify against the manifest'
-    & (Join-Path $here 'make-cut3-manifest.ps1')
+    & (Join-Path $here 'make-cut3-manifest.ps1') -AllowDonorMismatch:$AllowDonorMismatch
     exit $LASTEXITCODE
 }

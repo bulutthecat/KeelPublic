@@ -290,14 +290,28 @@ if (-not (Skipped 'python') -and -not (Done 'python')) {
     $pyDir = Join-Path $ToolsRoot 'python'
     if (-not (Test-Path (Join-Path $pyDir 'python.exe'))) {
         Log 'installing python (per-user, no PATH changes)'
-        $pr = Start-Process $exe -ArgumentList @('/quiet','InstallAllUsers=0',"TargetDir=$pyDir",'PrependPath=0','Include_test=0','Include_launcher=0','AssociateFiles=0','Shortcuts=0','Include_doc=0','CompileAll=0') -Wait -PassThru
-        if ($pr.ExitCode -ne 0) { throw "python installer failed ($($pr.ExitCode))" }
+        $pyLog = Join-Path $Dl 'python-install.log'
+        $pr = Start-Process $exe -ArgumentList @('/quiet','/log',"`"$pyLog`"",'InstallAllUsers=0',"TargetDir=$pyDir",'PrependPath=0','Include_test=0','Include_launcher=0','AssociateFiles=0','Shortcuts=0','Include_doc=0','CompileAll=0') -Wait -PassThru
+        if ($pr.ExitCode -ne 0) { throw "python installer failed ($($pr.ExitCode)), see $pyLog" }
+        if (-not (Test-Path (Join-Path $pyDir 'python.exe'))) { throw "python installer exited 0 but left no python.exe in $pyDir, see $pyLog" }
     }
     & (Join-Path $pyDir 'python.exe') -m pip install --upgrade --quiet pip
+    if ($LASTEXITCODE -ne 0) { throw 'pip upgrade failed' }
+    Mark 'python'; Log 'python'
+}
 
-    & (Join-Path $pyDir 'python.exe') -m pip install --quiet pefile lief capstone rich
-    if ($LASTEXITCODE -ne 0) { throw 'pip install failed' }
-    Mark 'python'; Log 'python + modules'
+if (-not (Skipped 'python')) {
+    # every run, since a toolchain provisioned before a module was added never reruns the stage above
+    $py = Join-Path $ToolsRoot 'python\python.exe'
+    if (-not (Test-Path $py)) { throw "no python at $py, delete $Dl\python.done to reinstall it" }
+    $modules = [ordered]@{ pefile = 'pefile'; Registry = 'python-registry'; lief = 'lief'; capstone = 'capstone'; rich = 'rich' }
+    $names = ($modules.Keys | ForEach-Object { "'$_'" }) -join ', '
+    $missing = @(& $py -c "import importlib.util as u; print('\n'.join(m for m in [$names] if not u.find_spec(m)))" | Where-Object { $_ })
+    if ($missing.Count) {
+        Log "installing python modules $($missing -join ', ')"
+        & $py -m pip install --quiet @($missing | ForEach-Object { $modules[$_] })
+        if ($LASTEXITCODE -ne 0) { throw 'pip install failed' }
+    }
 }
 
 if (-not (Skipped 'detours') -and -not (Done 'detours')) {

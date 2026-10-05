@@ -19,7 +19,8 @@ param(
     [string]$Cut3,
     [string]$Manifest,
     [string]$Raw,
-    [switch]$Write
+    [switch]$Write,
+    [switch]$AllowDonorMismatch
 )
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -70,6 +71,14 @@ if ($Write) {
         $byLeaf[$l] += $rel
     }
 
+    # a recorded source is kept, guessing it by name picked System32's v5 comctl32 for the v6 assembly
+    $prevFrom = @{}
+    if (Test-Path $Manifest) {
+        foreach ($p in (Get-Content $Manifest -Raw | ConvertFrom-Json).files) {
+            if ($p.from -and (Test-Path -LiteralPath (Join-Path $Raw ($p.from -replace '/', '\')))) { $prevFrom[$p.path] = $p.from }
+        }
+    }
+
     $files = foreach ($f in (Get-Cut3Files $Cut3)) {
         $leaf = (Split-Path $f.path -Leaf)
         $e = [ordered]@{ path = $f.path; size = $f.size; sha256 = $f.sha256 }
@@ -80,6 +89,10 @@ if ($Write) {
         }
         if ($src) {
             $e.from = $src -replace '\\', '/'
+        }
+        elseif ($prevFrom.ContainsKey($f.path)) {
+            $e.from = $prevFrom[$f.path]
+            $e.built = $true
         }
         elseif (-not (Test-Generated $f.path)) {
             # patched in place by the build, so record the pristine donor copy it starts from
@@ -127,19 +140,23 @@ $want = (Get-Content $Manifest -Raw | ConvertFrom-Json)
 $have = @{}
 foreach ($f in (Get-Cut3Files $Cut3)) { $have[$f.path] = $f }
 
-$missing = @(); $changed = @(); $extra = @(); $builtOk = 0
+$missing = @(); $changed = @(); $resized = @(); $extra = @(); $builtOk = 0
 foreach ($w in $want.files) {
     $h = $have[$w.path]
     if (-not $h) { $missing += $w.path; continue }
-    # a file this machine builds never hash-matches a recording from another machine, so only presence is checked
-    if ($w.built) { $builtOk++; continue }
+    # a file this machine builds never hash-matches a recording from another machine, but one built from the wrong donor file is far off its size
+    if ($w.built) {
+        if ([Math]::Abs($h.size - $w.size) -gt ($w.size / 4)) { $resized += ('{0}  ({1} bytes, recorded {2})' -f $w.path, $h.size, $w.size) }
+        else { $builtOk++ }
+        continue
+    }
     if ($h.sha256 -ne $w.sha256) { $changed += $w.path }
 }
 $wantPaths = @{}; foreach ($w in $want.files) { $wantPaths[$w.path] = $true }
 foreach ($k in $have.Keys) { if (-not $wantPaths[$k]) { $extra += $k } }
 
 Write-Host ("cut3 {0} files on disk, manifest expects {1} ({2} built here, recorded {3})" -f $have.Count, $want.fileCount, $builtOk, $want.recorded)
-foreach ($set in @(@{n='MISSING'; v=$missing}, @{n='CHANGED'; v=$changed})) {
+foreach ($set in @(@{n='MISSING'; v=$missing}, @{n='CHANGED'; v=$changed}, @{n='BUILT FROM THE WRONG FILE'; v=$resized})) {
     if ($set.v.Count) {
         Write-Host ("  {0} {1}" -f $set.n, $set.v.Count) -ForegroundColor Red
         $set.v | Select-Object -First 12 | ForEach-Object { Write-Host "    $_" }
@@ -151,5 +168,6 @@ if ($extra.Count) {
     Write-Host ("  extra (not in manifest, not an error) {0}" -f $extra.Count) -ForegroundColor DarkYellow
     $extra | Select-Object -First 8 | ForEach-Object { Write-Host "    $_" }
 }
-if ($missing.Count -or $changed.Count) { Write-Host 'cut3 DOES NOT MATCH the manifest.' -ForegroundColor Red; exit 1 }
+if ($missing.Count -or ((-not $AllowDonorMismatch) -and ($changed.Count -or $resized.Count))) { Write-Host 'cut3 DOES NOT MATCH the manifest.' -ForegroundColor Red; exit 1 }
+if ($changed.Count -or $resized.Count) { Write-Host 'cut3 does not match the manifest, accepted because of -AllowDonorMismatch.' -ForegroundColor Yellow; exit 0 }
 Write-Host 'cut3 matches the manifest.' -ForegroundColor Green
