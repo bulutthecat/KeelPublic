@@ -217,7 +217,7 @@ DWORD WINAPI Worker(LPVOID param) {
                 const LONG st = createConn(nullptr, nullptr, nullptr);
                 s.End((HRESULT)st);
                 Emit("       NTSTATUS = 0x%08lX %s", (unsigned long)st,
-                     st == 0 ? "(SUCCESS)" : (st == (LONG)0xC0000022 ? "(STATUS_ACCESS_DENIED likley gated)" : ""));
+                     st == 0 ? "(SUCCESS)" : (st == (LONG)0xC0000022 ? "(STATUS_ACCESS_DENIED likely gated)" : ""));
             }
             if (createDwm) {
                 ULONGLONG handle = 0;
@@ -225,7 +225,7 @@ DWORD WINAPI Worker(LPVOID param) {
                 const LONG st = createDwm(&handle, nullptr, nullptr, nullptr, nullptr, nullptr);
                 s.End((HRESULT)st);
                 Emit("       NTSTATUS = 0x%08lX  handle=0x%llX %s", (unsigned long)st, handle,
-                     st == 0 ? "(binding SUCESS to DWM process)"
+                     st == 0 ? "(binding SUCCESS to DWM process)"
                              : (st == (LONG)0xC0000022 ? "(STATUS_ACCESS_DENIED gated to registered DWM)" : ""));
             }
         }

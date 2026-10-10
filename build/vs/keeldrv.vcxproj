@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64EC">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64EC</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|ARM64EC">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>ARM64EC</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{630FFFBB-D3E3-5579-AA33-2657AB330102}</ProjectGuid>
+    <RootNamespace>keeldrv</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>$(KeelToolset)</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>$(KeelToolset)</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64EC'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>$(KeelToolset)</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|ARM64EC'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>$(KeelToolset)</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Target Name="KeelCheckDrvPlatform" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(Platform)'=='x64' And '$(KeelDrvArch)'=='arm64ec'" Text="keeldrv: this WDK ships no x64 km libraries (only arm64ec). Build the ARM64EC configuration of keeldrv, or install a WDK with x64 km libs." />
+    <Error Condition="'$(Platform)'=='ARM64EC' And '$(KeelDrvArch)'!='arm64ec'" Text="keeldrv: no arm64ec km libraries found under $(KeelKitsRoot)\Lib\$(KeelSdkVer)\km" />
+    <Message Importance="high" Text="keeldrv arch=$(KeelDrvArch) sdk=$(KeelSdkVer) kmdf=$(KeelKmdf) kits=$(KeelKitsRoot)" />
+  </Target>
+  <PropertyGroup>
+    <OutDir>$(KEEL_ROOT)out\vs\$(Configuration)\keeldrv\</OutDir>
+    <IntDir>$(KEEL_ROOT)build\obj\keeldrv\$(Configuration)\$(Platform)\</IntDir>
+    <TargetExt>.sys</TargetExt>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile Condition="'$(Configuration)'=='Debug'">
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <PreprocessorDefinitions>UNICODE;_UNICODE;_WIN32_WINNT=0x0A00;WINVER=0x0A00;NTDDI_VERSION=0x0A000009;WIN32_LEAN_AND_MEAN;NOMINMAX;_WIN64;_AMD64_;AMD64;POOL_NX_OPTIN=1;DEPRECATE_DDK_FUNCTIONS=1;KMDF_VERSION_MAJOR=$(KeelKmdfMajor);KMDF_VERSION_MINOR=$(KeelKmdfMinor);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <Optimization>Disabled</Optimization>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalOptions>/utf-8 /Zc:__cplusplus /kernel /GS /Gy /Gw /Oi /Zc:wchar_t- /GR- /EHs-c- /Qspectre /wd4201 /wd4214 /wd4996 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(KeelKmInc);$(KeelKmCrtInc);$(KeelKmSharedInc);$(KeelWdfInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link Condition="'$(Configuration)'=='Debug'">
+      <SubSystem>Native</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EntryPointSymbol>FxDriverEntry</EntryPointSymbol>
+      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
+      <AdditionalDependencies>ntoskrnl.lib;hal.lib;wmilib.lib;BufferOverflowFastFailK.lib;WdfLdr.lib;WdfDriverEntry.lib;ntstrsafe.lib;wdmsec.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(KeelKmLib);$(KeelWdfLib);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>/DRIVER /SUBSYSTEM:NATIVE,10.0 /ENTRY:FxDriverEntry /NODEFAULTLIB /INCREMENTAL:NO /RELEASE /NXCOMPAT /DYNAMICBASE /MANIFEST:NO /INTEGRITYCHECK /guard:cf /MERGE:_TEXT=.text /MERGE:_PAGE=PAGE /SECTION:INIT,d /OPT:REF /OPT:ICF /DEBUG /IGNORE:4078 /IGNORE:4254 %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+    <ClCompile Condition="'$(Configuration)'=='RelWithDebInfo'">
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <PreprocessorDefinitions>UNICODE;_UNICODE;_WIN32_WINNT=0x0A00;WINVER=0x0A00;NTDDI_VERSION=0x0A000009;WIN32_LEAN_AND_MEAN;NOMINMAX;_WIN64;_AMD64_;AMD64;POOL_NX_OPTIN=1;DEPRECATE_DDK_FUNCTIONS=1;KMDF_VERSION_MAJOR=$(KeelKmdfMajor);KMDF_VERSION_MINOR=$(KeelKmdfMinor);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <Optimization>MaxSpeed</Optimization>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalOptions>/utf-8 /Zc:__cplusplus /kernel /GS /Gy /Gw /Oi /Zc:wchar_t- /GR- /EHs-c- /Qspectre /wd4201 /wd4214 /wd4996 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(KeelKmInc);$(KeelKmCrtInc);$(KeelKmSharedInc);$(KeelWdfInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link Condition="'$(Configuration)'=='RelWithDebInfo'">
+      <SubSystem>Native</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EntryPointSymbol>FxDriverEntry</EntryPointSymbol>
+      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
+      <AdditionalDependencies>ntoskrnl.lib;hal.lib;wmilib.lib;BufferOverflowFastFailK.lib;WdfLdr.lib;WdfDriverEntry.lib;ntstrsafe.lib;wdmsec.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(KeelKmLib);$(KeelWdfLib);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>/DRIVER /SUBSYSTEM:NATIVE,10.0 /ENTRY:FxDriverEntry /NODEFAULTLIB /INCREMENTAL:NO /RELEASE /NXCOMPAT /DYNAMICBASE /MANIFEST:NO /INTEGRITYCHECK /guard:cf /MERGE:_TEXT=.text /MERGE:_PAGE=PAGE /SECTION:INIT,d /OPT:REF /OPT:ICF /DEBUG /IGNORE:4078 /IGNORE:4254 %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+    <ClCompile Condition="'$(Configuration)'=='Debug'">
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <PreprocessorDefinitions>UNICODE;_UNICODE;_WIN32_WINNT=0x0A00;WINVER=0x0A00;NTDDI_VERSION=0x0A000009;WIN32_LEAN_AND_MEAN;NOMINMAX;_WIN64;_AMD64_;AMD64;POOL_NX_OPTIN=1;DEPRECATE_DDK_FUNCTIONS=1;KMDF_VERSION_MAJOR=$(KeelKmdfMajor);KMDF_VERSION_MINOR=$(KeelKmdfMinor);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <Optimization>Disabled</Optimization>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalOptions>/utf-8 /Zc:__cplusplus /kernel /GS /Gy /Gw /Oi /Zc:wchar_t- /GR- /EHs-c- /Qspectre /wd4201 /wd4214 /wd4996 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(KeelKmInc);$(KeelKmCrtInc);$(KeelKmSharedInc);$(KeelWdfInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link Condition="'$(Configuration)'=='Debug'">
+      <SubSystem>Native</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EntryPointSymbol>FxDriverEntry</EntryPointSymbol>
+      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
+      <AdditionalDependencies>ntoskrnl.lib;hal.lib;wmilib.lib;BufferOverflowFastFailK.lib;WdfLdr.lib;WdfDriverEntry.lib;ntstrsafe.lib;wdmsec.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(KeelKmLib);$(KeelWdfLib);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>/DRIVER /SUBSYSTEM:NATIVE,10.0 /ENTRY:FxDriverEntry /NODEFAULTLIB /INCREMENTAL:NO /RELEASE /NXCOMPAT /DYNAMICBASE /MANIFEST:NO /INTEGRITYCHECK /guard:cf /MERGE:_TEXT=.text /MERGE:_PAGE=PAGE /SECTION:INIT,d /OPT:REF /OPT:ICF /DEBUG /IGNORE:4078 /IGNORE:4254 %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+    <ClCompile Condition="'$(Configuration)'=='RelWithDebInfo'">
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <ConformanceMode>true</ConformanceMode>
+      <PreprocessorDefinitions>UNICODE;_UNICODE;_WIN32_WINNT=0x0A00;WINVER=0x0A00;NTDDI_VERSION=0x0A000009;WIN32_LEAN_AND_MEAN;NOMINMAX;_WIN64;_AMD64_;AMD64;POOL_NX_OPTIN=1;DEPRECATE_DDK_FUNCTIONS=1;KMDF_VERSION_MAJOR=$(KeelKmdfMajor);KMDF_VERSION_MINOR=$(KeelKmdfMinor);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <Optimization>MaxSpeed</Optimization>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalOptions>/utf-8 /Zc:__cplusplus /kernel /GS /Gy /Gw /Oi /Zc:wchar_t- /GR- /EHs-c- /Qspectre /wd4201 /wd4214 /wd4996 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(KeelKmInc);$(KeelKmCrtInc);$(KeelKmSharedInc);$(KeelWdfInc);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link Condition="'$(Configuration)'=='RelWithDebInfo'">
+      <SubSystem>Native</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EntryPointSymbol>FxDriverEntry</EntryPointSymbol>
+      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
+      <AdditionalDependencies>ntoskrnl.lib;hal.lib;wmilib.lib;BufferOverflowFastFailK.lib;WdfLdr.lib;WdfDriverEntry.lib;ntstrsafe.lib;wdmsec.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(KeelKmLib);$(KeelWdfLib);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>/DRIVER /SUBSYSTEM:NATIVE,10.0 /ENTRY:FxDriverEntry /NODEFAULTLIB /INCREMENTAL:NO /RELEASE /NXCOMPAT /DYNAMICBASE /MANIFEST:NO /INTEGRITYCHECK /guard:cf /MERGE:_TEXT=.text /MERGE:_PAGE=PAGE /SECTION:INIT,d /OPT:REF /OPT:ICF /DEBUG /IGNORE:4078 /IGNORE:4254 %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\keeldrv\driver.c" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

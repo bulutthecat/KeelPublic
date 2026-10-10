@@ -27,7 +27,7 @@ window manager or a desktop environment. Windows 7 handles all of that for us.
 you should not expect everything to be working perfectly and there are plenty
 of weird, obtuse, and downright annoying bugs that are going to be patched
 over time. There are and will be graphical bugs, crashes, glitches and weird
-behavior which make it unsutable without great manual modification for daily
+behavior which make it unsuitable without great manual modification for daily
 use. Futures you might expect to 'just work' might not work at all
 compared to Windows 10 or Windows 7 and are going to be ironed out
 over time.**
@@ -135,6 +135,20 @@ with `-ToolsRoot`, resume a partial run by re-running it, and skip a stage with
 
 The Windows ADK is the one thing it does not fetch because of the maintainer rules.
 
+### Building with Visual Studio 2026 (alternative to CMake)
+
+`build\Keel.sln` (18 VC++ projects, Debug/RelWithDebInfo x64/Win32/ARM64EC) is checked
+in and kept in sync with CMake. One command installs VS2026 Community + SDK + WDK +
+Detours and smoke-builds a project:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\vs2026-setup.ps1
+msbuild build\Keel.sln /p:Configuration=RelWithDebInfo /p:Platform=x64
+```
+
+See `README-VS.md` for details; regenerate the solution after edits with
+`python tools\gen-vs2026-sln.py`.
+
 ### Building the code alone
 
 ```powershell
@@ -169,7 +183,7 @@ Expect these to be fixed within the coming four to five weeks.
   no GDI present tokens which is required for rendering by the Windows 7 compositor. 
   For now, the system autologin's, so do not lock, sign out or set a password.
 - **UWP applications do not render.** (Settings, Xbox, Store), for the same reason. Win32
-  applications are unaffected. A DirectComposition implenetation inside keeldwm is planned
+  applications are unaffected. A DirectComposition implementation inside keeldwm is planned
   for those applications, but nothing else.
 - **Black horizontal streaks on Intel GPU's (on rare occasions)**
 - **Explorer freezes at random.** The shell or an open folder window can stop responding with no
@@ -194,7 +208,7 @@ Expect these to be fixed within the coming four to five weeks.
   `control powercfg.cpl` show "No such interface supported" because the Windows 7 control.exe hands
   them to Windows 10's rundll32, and `control /name Microsoft.X` opens nothing because a COM class it
   activates out of process is not registered. Opening the same pages from Control Panel works for now.
-- **Windows servicing is untested and will most likley not work.** Every offset is designed for
+- **Windows servicing is untested and will most likely not work.** Every offset is designed for
   19044, SFC and cumulative update will revert in-place changes.
 - **Test signing has to stay on.** `keeldrv` is not WHQL signed as of right now, this is planned
   for future updates if there is enough demand for me to get a licence.

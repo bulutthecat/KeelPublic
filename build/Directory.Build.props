@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <!-- One place to pick the compiler for this solution.
+       VS2026 (Dev18) ships toolset v145; override per machine with
+       msbuild /p:VctoolsVersion=v144 (or edit KeelToolset here). -->
+  <PropertyGroup>
+    <KeelToolset Condition="'$(KeelToolset)'=='' And '$(VctoolsVersion)'!=''">$(VctoolsVersion)</KeelToolset>
+    <KeelToolset Condition="'$(KeelToolset)'==''">v145</KeelToolset>
+    <!-- repo root: build\ -> ..\ ; KEEL_ROOT must end with a backslash -->
+    <KEEL_ROOT Condition="'$(KEEL_ROOT)'==''">$([MSBuild]::EnsureTrailingSlash('$(MSBuildThisFileDirectory)..\'))</KEEL_ROOT>
+    <!-- tools root (detours lives here; env.ps1/setup-toolchain.ps1 use the same var) -->
+    <KEEL_TOOLS Condition="'$(KEEL_TOOLS)'=='' And '$(DETOURS_ROOT)'!=''">$([MSBuild]::RemoveDirectoryNameEndingSlash($(DETOURS_ROOT)))</KEEL_TOOLS>
+    <KEEL_TOOLS Condition="'$(KEEL_TOOLS)'=='' And $env(DETOURS_ROOT)!=''">$([MSBuild]::RemoveDirectoryNameEndingSlash($env(DETOURS_ROOT)))</KEEL_TOOLS>
+    <KEEL_TOOLS Condition="'$(KEEL_TOOLS)'==''">$([MSBuild]::EnsureTrailingSlash($env(KEEL_TOOLS)))</KEEL_TOOLS>
+    <KEEL_TOOLS Condition="'$(KEEL_TOOLS)'==''">C:\Keel-tools</KEEL_TOOLS>
+    <DETOURS_LIB64 Condition="Exists('$(KEEL_TOOLS)detours\lib.X64\detours.lib')">$(KEEL_TOOLS)detours\lib.X64\detours.lib</DETOURS_LIB64>
+    <DETOURS_INC Condition="Exists('$(KEEL_TOOLS)detours\include\detours.h')">$(KEEL_TOOLS)detours\include</DETOURS_INC>
+  </PropertyGroup>
+
+  <!-- Windows Kits root + newest installed SDK version (same rule as tools\env.ps1) -->
+  <PropertyGroup>
+    <KeelKitsRoot Condition="'$(WindowsSdkDir)'!='' And Exists('$(WindowsSdkDir)')">$(WindowsSdkDir.TrimEnd('\'))</KeelKitsRoot>
+    <KeelKitsRoot Condition="'$(KeelKitsRoot)'=='' And Exists('$(KEEL_TOOLS)msvc\Windows Kits\10')">$(KEEL_TOOLS)msvc\Windows Kits\10</KeelKitsRoot>
+    <KeelKitsRoot Condition="'$(KeelKitsRoot)'=='' And Exists('$(ProgramFiles)\Windows Kits\10')">$(ProgramFiles)\Windows Kits\10</KeelKitsRoot>
+    <KeelSdkVer Condition="'$(WindowsSDKVersion)'!=''">$(WindowsSDKVersion.TrimEnd('\'))</KeelSdkVer>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(KeelKitsRoot)'!='' And '$(KeelSdkVer)'==''">
+    <_KeelSdkInc Include="$(KeelKitsRoot)\Include\*\km\ntddk.h" />
+  </ItemGroup>
+  <UsingTask TaskName="_KeelPickVer" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Candidates ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <Result OutputParameterType="Microsoft.Build.Framework.ITaskItem" />
+    </ParameterGroup>
+    <Task xmlns=""><Code Type="Fragment" Language="cs"><![CDATA[
+      System.Version best = null; Microsoft.Build.Framework.ITaskItem win = null;
+      foreach (var c in Candidates) {
+        var m = System.Text.RegularExpressions.Regex.Match(c.ItemSpec, @"(\d+(\.\d+)+)");
+        if (!m.Success) continue;
+        var v = new System.Version(m.Value);
+        if (best == null || v > best) { best = v; win = c; }
+      }
+      Result = win;
+]]></Code></Task>
+  </UsingTask>
+  <_KeelPickVer Candidates="@(_KeelSdkInc)" Condition="'$(KeelSdkVer)'=='' And '@(_KeelSdkInc)'!=''">
+    <Output TaskParameter="Result" ItemName="_KeelSdkWin" />
+  </_KeelPickVer>
+  <PropertyGroup Condition="'$(KeelSdkVer)'=='' And '@(_KeelSdkWin)'!=''">
+    <KeelSdkVer>$([System.Text.RegularExpressions.Regex]::Match('%(_KeelSdkWin.FullPath)', '\d+(\.\d+)+').Value)</KeelSdkVer>
+  </PropertyGroup>
+
+  <!-- keeldrv: prefer x64 km libs; fall back to arm64ec (some Win11 WDKs dropped x64 km) -->
+  <PropertyGroup Condition="'$(Platform)'=='x64'">
+    <KeelDrvArch Condition="'$(KeelKitsRoot)'!='' And Exists('$(KeelKitsRoot)\Lib\$(KeelSdkVer)\km\x64\ntoskrnl.lib')">x64</KeelDrvArch>
+    <KeelDrvArch Condition="'$(KeelDrvArch)'=='' And '$(KeelKitsRoot)'!='' And Exists('$(KeelKitsRoot)\Lib\$(KeelSdkVer)\km\arm64ec\ntoskrnl.lib')">arm64ec</KeelDrvArch>
+    <KeelDrvArch Condition="'$(KeelDrvArch)'==''">x64</KeelDrvArch>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Platform)'=='ARM64EC'">
+    <KeelDrvArch>arm64ec</KeelDrvArch>
+  </PropertyGroup>
+  <PropertyGroup>
+    <KeelKmInc>$(KeelKitsRoot)\Include\$(KeelSdkVer)\km</KeelKmInc>
+    <KeelKmCrtInc>$(KeelKitsRoot)\Include\$(KeelSdkVer)\km\crt</KeelKmCrtInc>
+    <KeelKmSharedInc>$(KeelKitsRoot)\Include\$(KeelSdkVer)\shared</KeelKmSharedInc>
+    <KeelKmLib>$(KeelKitsRoot)\Lib\$(KeelSdkVer)\km\$(KeelDrvArch)</KeelKmLib>
+    <KeelWdfLibRoot>$(KeelKitsRoot)\Lib\wdf\kmdf\$(KeelDrvArch)</KeelWdfLibRoot>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(KeelWdfLibRoot)')">
+    <_KeelWdf Include="$(KeelWdfLibRoot)\*\WdfDriverEntry.lib" />
+  </ItemGroup>
+  <_KeelPickVer Candidates="@(_KeelWdf)" Condition="'@(_KeelWdf)'!=''">
+    <Output TaskParameter="Result" ItemName="_KeelWdfWin" />
+  </_KeelPickVer>
+  <PropertyGroup>
+    <KeelKmdf Condition="'@(_KeelWdfWin)'!=''">$([System.Text.RegularExpressions.Regex]::Match('%(_KeelWdfWin.FullPath)', 'kmdf.(\d+\.\d+)').Groups[1].Value)</KeelKmdf>
+    <KeelKmdfMajor Condition="'$(KeelKmdf)'!=''">$(KeelKmdf.Split('.')[0])</KeelKmdfMajor>
+    <KeelKmdfMinor Condition="'$(KeelKmdf)'!=''">$(KeelKmdf.Split('.')[1])</KeelKmdfMinor>
+    <KeelWdfInc Condition="'$(KeelKmdf)'!=''">$(KeelKitsRoot)\Include\wdf\kmdf\$(KeelKmdf)</KeelWdfInc>
+    <KeelWdfLib Condition="'$(KeelKmdf)'!=''">$(KeelWdfLibRoot)\$(KeelKmdf)</KeelWdfLib>
+  </PropertyGroup>
+</Project>
